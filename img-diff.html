@@ -28,11 +28,11 @@
     -webkit-tap-highlight-color: transparent;
   }
   #bar {
-    display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+    display: flex; flex-direction: column; align-items: stretch; gap: 8px;
     padding: 8px 10px; background: var(--panel); border-bottom: 1px solid var(--border);
   }
   .brow { display: flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; flex-wrap: nowrap; }
-  .brow .pick { flex: 0 1 auto; min-width: 0; }
+  .brow .pick { flex: 1 1 auto; min-width: 0; }
   #rowGroups { gap: 8px; overflow-x: auto; max-width: 100%; scrollbar-width: thin; }
   .tag {
     flex: none; width: 20px; height: 20px; border-radius: 5px;
@@ -41,7 +41,7 @@
     font-weight: 700; font-size: 12px;
   }
   .pick {
-    max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     border: 1px solid var(--border); background: var(--panel); color: var(--text);
     border-radius: 7px; padding: 5px 10px; font-size: 13px; cursor: pointer;
   }
@@ -55,9 +55,9 @@
   .grp button:last-child { border-right: none; }
   .grp button.on { background: var(--accent); color: #fff; }
   .grp button:disabled { opacity: 0.35; cursor: default; }
-  .th { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
-  .th input[type="range"] { width: 110px; accent-color: var(--accent); }
-  .th .v { min-width: 2.2em; text-align: right; color: var(--text); }
+  .th { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 13px; }
+  .th input[type="range"] { flex: 1 1 auto; min-width: 0; width: auto; accent-color: var(--accent); }
+  .th .v { flex: 0 0 auto; min-width: 2.2em; text-align: right; color: var(--text); }
   #stage { flex: 1; min-height: 0; display: flex; }
   #stage.hsplit { flex-direction: row; }
   #stage.vsplit { flex-direction: column; }
@@ -140,7 +140,7 @@
 <input type="file" id="inputB" accept="image/*" hidden>
 <script>
 "use strict";
-/* img-diff v0.2.2 — 离线单文件图片对比工具
+/* img-diff v0.2.3 — 离线单文件图片对比工具
    差异检测：对齐网格上逐像素比对原始 RGB（彩色），显示层转灰度。
    差异着色：重叠=亮紫；并排=本图数值更小亮蓝 / 更大亮红（亮度相同仅色相不同=紫）。
    对齐：自动 = 两图拉伸到同一矩形网格；手动 = 每图 2 锚点解相似变换(平移+缩放+旋转)，

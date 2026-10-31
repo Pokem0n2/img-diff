@@ -255,6 +255,24 @@ const H = window.__imgdiff;
     ok('rowA-narrow-one-line', same1);
   }
 
+  // T15 rows fill width: pickers & slider absorb trailing blank, values flush right
+  {
+    const bar = document.getElementById('bar');
+    const barRight = bar.getBoundingClientRect().right - 10;
+    const pickA = document.getElementById('pickA'), metaA = document.getElementById('metaA');
+    const pickB = document.getElementById('pickB'), metaB = document.getElementById('metaB');
+    const thR = document.getElementById('thRange'), thV = document.getElementById('thVal');
+    ok('pickA-grows', pickA.getBoundingClientRect().width > 400, pickA.getBoundingClientRect().width);
+    ok('pickB-grows', pickB.getBoundingClientRect().width > 400, pickB.getBoundingClientRect().width);
+    ok('slider-grows', thR.getBoundingClientRect().width > 300, thR.getBoundingClientRect().width);
+    ok('val-flush-right', Math.abs(thV.getBoundingClientRect().right - barRight) < 2,
+       [thV.getBoundingClientRect().right, barRight]);
+    ok('metaA-flush-right', Math.abs(metaA.getBoundingClientRect().right - barRight) < 2,
+       metaA.getBoundingClientRect().right);
+    ok('metaB-flush-right', Math.abs(metaB.getBoundingClientRect().right - barRight) < 2,
+       metaB.getBoundingClientRect().right);
+  }
+
   // demo view for screenshot: offset square on grayscale + red band
   {
     const a = cv(240, 180), b = cv(240, 180);
