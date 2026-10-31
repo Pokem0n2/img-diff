@@ -12,7 +12,7 @@ import time
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PAGE = "file://" + os.path.join(os.path.dirname(HERE), "index.html")
+PAGE = "file://" + os.path.join(os.path.dirname(HERE), "img-diff.html")
 SHOT = os.path.join(os.path.dirname(HERE), "tests", "shot.png")
 PORT = 4483
 GECKO = os.path.expanduser("~/.local/bin/geckodriver")
