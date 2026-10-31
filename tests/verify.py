@@ -82,6 +82,40 @@ const H = window.__imgdiff;
     ok('color-not-gray-1600', H.diffCount() === 1600, H.diffCount());
   }
 
+  // T5b directional colors: A brighter square -> A side red, B side blue, overlap purple
+  {
+    const a = cv(60, 40), b = cv(60, 40);
+    const x = a.getContext('2d'), y = b.getContext('2d');
+    x.fillStyle = 'rgb(128,128,128)'; x.fillRect(0, 0, 60, 40);
+    y.fillStyle = 'rgb(128,128,128)'; y.fillRect(0, 0, 60, 40);
+    x.fillStyle = '#fff'; x.fillRect(10, 10, 20, 20);
+    y.fillStyle = '#000'; y.fillRect(10, 10, 20, 20);
+    await H.loadPair(await fileOf(a, 'd1.png'), await fileOf(b, 'd2.png'));
+    ok('dir-count-400', H.diffCount() === 400, H.diffCount());
+    ok('dir-A-larger', H.dirAt(20, 20) === 1, H.dirAt(20, 20));
+    ok('dir-nodiff-bg', H.dirAt(2, 2) === 0 && H.diffAt(2, 2) === 0, H.dirAt(2, 2));
+    const pa = H.layerPixel('A', 20, 20), pb = H.layerPixel('B', 20, 20), po = H.layerPixel('overlap', 20, 20);
+    ok('color-A-red', pa[0] === 255 && pa[1] === 23 && pa[2] === 68 && pa[3] === 255, pa);
+    ok('color-B-blue', pb[0] === 0 && pb[1] === 176 && pb[2] === 255, pb);
+    ok('color-overlap-purple', po[0] === 168 && po[1] === 85 && po[2] === 247, po);
+    const pOut = H.layerPixel('A', 2, 2);
+    ok('color-nodiff-transparent', pOut[3] === 0, pOut);
+  }
+
+  // T5c luma tie (77*150 == 150*77): channel diff > thr but equal brightness -> purple both sides
+  {
+    const a = cv(50, 50), b = cv(50, 50);
+    const x = a.getContext('2d'); x.fillStyle = 'rgb(150,0,0)'; x.fillRect(0, 0, 50, 50);
+    const y = b.getContext('2d'); y.fillStyle = 'rgb(0,77,0)'; y.fillRect(0, 0, 50, 50);
+    await H.loadPair(await fileOf(a, 't1.png'), await fileOf(b, 't2.png'));
+    ok('tie-count-2500', H.diffCount() === 2500, H.diffCount());
+    ok('tie-dir-0', H.dirAt(25, 25) === 0, H.dirAt(25, 25));
+    const pa = H.layerPixel('A', 25, 25);
+    ok('tie-purple-A', pa[0] === 168 && pa[1] === 85 && pa[2] === 247, pa);
+    const pb = H.layerPixel('B', 25, 25);
+    ok('tie-purple-B', pb[0] === 168 && pb[1] === 85 && pb[2] === 247, pb);
+  }
+
   // T6 anchor similarity math (exact) + degenerate rejection
   {
     H.setAnchors([{x:20,y:30},{x:95,y:80}], [{x:10,y:10},{x:60,y:10}]);
@@ -206,6 +240,7 @@ const H = window.__imgdiff;
     cb.fillStyle = '#909090'; cb.beginPath(); cb.arc(170, 40, 22, 0, 7); cb.fill();
     await H.loadPair(await fileOf(a, 'demo1.png'), await fileOf(b, 'demo2.png'));
     ok('demo-diff-positive', H.diffCount() > 500, H.diffCount());
+    document.querySelector('#grpView button[data-v="hsplit"]').click();
   }
 
   ok('no-page-errors', R.errors.length === 0, R.errors);

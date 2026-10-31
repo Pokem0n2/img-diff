@@ -39,7 +39,7 @@
     font-weight: 700; font-size: 12px;
   }
   .pick {
-    max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     border: 1px solid var(--border); background: var(--panel); color: var(--text);
     border-radius: 7px; padding: 5px 10px; font-size: 13px; cursor: pointer;
   }
@@ -90,9 +90,6 @@
     <button class="pick" id="pickA">选择图片</button>
     <span class="meta" id="metaA"></span>
   </div>
-  <div class="grp" id="grpFocus">
-    <button data-v="all" class="on">同步</button><button data-v="A">图A</button><button data-v="B">图B</button>
-  </div>
   <div class="grp" id="grpView">
     <button data-v="overlap" class="on">重叠</button><button data-v="hsplit">左右</button><button data-v="vsplit">上下</button>
   </div>
@@ -101,6 +98,9 @@
   </div>
   <div class="grp" id="grpAlign">
     <button data-v="auto" class="on">自动对齐</button><button data-v="manual">手动对齐</button>
+  </div>
+  <div class="grp" id="grpFocus">
+    <button data-v="all" class="on">同步</button><button data-v="A">图A</button><button data-v="B">图B</button>
   </div>
   <label class="th">差异阈值
     <input type="range" id="thRange" min="0" max="120" value="20">
@@ -139,8 +139,9 @@
 <input type="file" id="inputB" accept="image/*" hidden>
 <script>
 "use strict";
-/* img-diff v0.1.0 — 离线单文件图片对比工具
-   差异检测：对齐网格上逐像素比对原始 RGB（彩色），显示层转灰度，差异像素标红。
+/* img-diff v0.2.0 — 离线单文件图片对比工具
+   差异检测：对齐网格上逐像素比对原始 RGB（彩色），显示层转灰度。
+   差异着色：重叠=亮紫；并排=本图数值更小亮蓝 / 更大亮红（亮度相同仅色相不同=紫）。
    对齐：自动 = 两图拉伸到同一矩形网格；手动 = 每图 2 锚点解相似变换(平移+缩放+旋转)，
          图B warp 到图A 的网格。 */
 
@@ -157,7 +158,8 @@
     grid: { w: 0, h: 0 },                // 比较网格
     layer: { A: null, B: null },         // {color: ImageData, gray: canvas, mask: Uint8Array}
     diffMask: null,
-    diffCanvas: null,
+    dirMask: null,
+    diffLayers: null,
     threshold: 20,
     anchors: { A: [], B: [] },           // [{x:int, y:int}] 源像素坐标
     focus: 'all',                        // 'all' | 'A' | 'B'
@@ -284,29 +286,59 @@
     updateBar();
   }
 
-  /* ---------- 差异计算（彩色逐通道比对） ---------- */
+  /* ---------- 差异计算（彩色逐通道比对）+ 方向着色 ---------- */
+  /* 颜色：重叠视图=亮紫；并排视图=本图数值更小亮蓝 / 更大亮红 / 亮度相同仅色相不同=紫 */
+  var DIFF_COLORS = {
+    purple: [168, 85, 247],
+    blue: [0, 176, 255],
+    red: [255, 23, 68]
+  };
+
   function computeDiff() {
-    if (!S.layer.A || !S.layer.B) { S.diffMask = null; return; }
+    if (!S.layer.A || !S.layer.B) { S.diffMask = null; S.dirMask = null; return; }
     var w = S.grid.w, h = S.grid.h, n = w * h;
     var dA = S.layer.A.color.data, dB = S.layer.B.color.data;
     var mA = S.layer.A.mask, mB = S.layer.B.mask;
     var mask = new Uint8Array(n);
+    var dir = new Int8Array(n);   // 1: 图A更亮  -1: 图A更暗  0: 亮度相同
     var t = S.threshold;
     for (var i = 0, p = 0; i < n; i++, p += 4) {
       if (!(mA[i] && mB[i])) continue;
       var dr = dA[p] - dB[p], dg = dA[p + 1] - dB[p + 1], db = dA[p + 2] - dB[p + 2];
-      if (dr > t || dr < -t || dg > t || dg < -t || db > t || db < -t) mask[i] = 1;
+      if (dr > t || dr < -t || dg > t || dg < -t || db > t || db < -t) {
+        mask[i] = 1;
+        var la = (dA[p] * 77 + dA[p + 1] * 150 + dA[p + 2] * 29) >> 8;
+        var lb = (dB[p] * 77 + dB[p + 1] * 150 + dB[p + 2] * 29) >> 8;
+        dir[i] = la < lb ? -1 : (la > lb ? 1 : 0);
+      }
     }
     S.diffMask = mask;
-    var c = S.diffCanvas || (S.diffCanvas = document.createElement('canvas'));
+    S.dirMask = dir;
+    if (!S.diffLayers) {
+      S.diffLayers = {
+        overlap: document.createElement('canvas'),
+        A: document.createElement('canvas'),
+        B: document.createElement('canvas')
+      };
+    }
+    var P = DIFF_COLORS.purple, BL = DIFF_COLORS.blue, RD = DIFF_COLORS.red;
+    fillDiffLayer(S.diffLayers.overlap, w, h, mask, function () { return P; });
+    fillDiffLayer(S.diffLayers.A, w, h, mask, function (i2) { return dir[i2] < 0 ? BL : (dir[i2] > 0 ? RD : P); });
+    fillDiffLayer(S.diffLayers.B, w, h, mask, function (i2) { return dir[i2] < 0 ? RD : (dir[i2] > 0 ? BL : P); });
+    requestRender();
+  }
+
+  function fillDiffLayer(c, w, h, mask, colorOf) {
     c.width = w; c.height = h;
     var ctx = c.getContext('2d');
     var img = ctx.createImageData(w, h), dd = img.data;
-    for (var j = 0, q = 0; j < n; j++, q += 4) {
-      if (mask[j]) { dd[q] = 211; dd[q + 1] = 47; dd[q + 2] = 47; dd[q + 3] = 255; }
+    for (var i = 0, q = 0; i < mask.length; i++, q += 4) {
+      if (mask[i]) {
+        var col = colorOf(i);
+        dd[q] = col[0]; dd[q + 1] = col[1]; dd[q + 2] = col[2]; dd[q + 3] = 255;
+      }
     }
     ctx.putImageData(img, 0, 0);
-    requestRender();
   }
 
   var diffPending = false;
@@ -396,11 +428,11 @@
         ctx.imageSmoothingEnabled = t.s < 3;
         ctx.drawImage(S.layer[which].gray, 0, 0);
       };
-      var drawDiff = function (t) {
-        if (!t) return;
+      var drawDiff = function (t, layer) {
+        if (!t || !layer) return;
         ctx.setTransform(dpr * t.s, 0, 0, dpr * t.s, dpr * t.tx, dpr * t.ty);
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(S.diffCanvas, 0, 0);
+        ctx.drawImage(layer, 0, 0);
       };
       var drawBorder = function (t) {
         if (!t) return;
@@ -417,11 +449,11 @@
           ctx.globalAlpha = 1;
         }
         var tRed = effTf(S.focus === 'all' ? 'A' : S.focus);
-        drawDiff(tRed); drawBorder(effTf('A'));
+        drawDiff(tRed, S.diffLayers.overlap); drawBorder(effTf('A'));
       } else {
         drawLayer(cv.which);
         var t2 = effTf(cv.which);
-        drawDiff(t2); drawBorder(t2);
+        drawDiff(t2, S.diffLayers[cv.which]); drawBorder(t2);
       }
     }
   }
@@ -877,6 +909,13 @@
       return c;
     },
     diffAt: function (x, y) { return S.diffMask ? S.diffMask[y * S.grid.w + x] : -1; },
+    dirAt: function (x, y) { return S.dirMask ? S.dirMask[y * S.grid.w + x] : -128; },
+    layerPixel: function (which, x, y) {
+      var c = S.diffLayers && S.diffLayers[which];
+      if (!c) return null;
+      var d = c.getContext('2d').getImageData(x, y, 1, 1).data;
+      return [d[0], d[1], d[2], d[3]];
+    },
     setThreshold: function (v) { S.threshold = v; els.thRange.value = v; els.thVal.textContent = String(v); computeDiff(); },
     setAnchors: function (a, b) { S.anchors.A = a; S.anchors.B = b; },
     applyManual: function () { S.align = 'manual'; setupAlignment(); },
