@@ -228,6 +228,33 @@ const H = window.__imgdiff;
     ok('ao-closes', document.getElementById('ao').hidden === true);
   }
 
+  // T14 toolbar four-row layout
+  {
+    const bar = document.getElementById('bar');
+    const kids = [...bar.children];
+    ok('bar-4-rows', kids.length === 4, kids.length);
+    ok('bar-column', getComputedStyle(bar).flexDirection === 'column');
+    ok('row2-groups-order', kids[1].id === 'rowGroups' &&
+       [...kids[1].children].map(g => g.id).join(',') === 'grpView,grpAlign,grpFocus',
+       [...kids[1].children].map(g => g.id));
+    ok('row3-is-threshold', !!kids[2].querySelector && !!kids[2].querySelector('#thRange'));
+    ok('row1-has-pickA', !!kids[0].querySelector('#pickA') && !!kids[0].querySelector('#metaA'));
+    ok('row4-has-pickB', !!kids[3].querySelector('#pickB') && !!kids[3].querySelector('#metaB'));
+    const center = el => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; };
+    kids[1].style.width = '340px';
+    const c0 = center(kids[1].children[0]);
+    const same2 = [...kids[1].children].every(g => Math.abs(center(g) - c0) < 1);
+    const total2 = kids[1].scrollWidth;
+    kids[1].style.width = '';
+    ok('row2-narrow-still-one-line', same2, total2);
+    const rowA = kids[0];
+    rowA.style.width = '300px';
+    const a0 = center(rowA.children[0]);
+    const same1 = [...rowA.children].every(g => Math.abs(center(g) - a0) < 1);
+    rowA.style.width = '';
+    ok('rowA-narrow-one-line', same1);
+  }
+
   // demo view for screenshot: offset square on grayscale + red band
   {
     const a = cv(240, 180), b = cv(240, 180);

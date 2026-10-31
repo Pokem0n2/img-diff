@@ -28,10 +28,12 @@
     -webkit-tap-highlight-color: transparent;
   }
   #bar {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
     padding: 8px 10px; background: var(--panel); border-bottom: 1px solid var(--border);
   }
-  .slot { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .brow { display: flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; flex-wrap: nowrap; }
+  .brow .pick { flex: 0 1 auto; min-width: 0; }
+  #rowGroups { gap: 8px; overflow-x: auto; max-width: 100%; scrollbar-width: thin; }
   .tag {
     flex: none; width: 20px; height: 20px; border-radius: 5px;
     background: var(--accent-soft); color: var(--accent);
@@ -48,7 +50,7 @@
   .grp { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--panel); }
   .grp button {
     border: none; border-right: 1px solid var(--border); background: transparent;
-    padding: 5px 11px; font-size: 13px; color: var(--muted); cursor: pointer;
+    padding: 4px 7px; font-size: 12px; color: var(--muted); cursor: pointer;
   }
   .grp button:last-child { border-right: none; }
   .grp button.on { background: var(--accent); color: #fff; }
@@ -85,25 +87,27 @@
 </head>
 <body>
 <header id="bar">
-  <div class="slot">
+  <div class="brow">
     <span class="tag">A</span>
     <button class="pick" id="pickA">选择图片</button>
     <span class="meta" id="metaA"></span>
   </div>
-  <div class="grp" id="grpView">
-    <button data-v="overlap" class="on">重叠</button><button data-v="hsplit">左右</button><button data-v="vsplit">上下</button>
-  </div>
-  <div class="grp" id="grpAlign">
-    <button data-v="auto" class="on">自动对齐</button><button data-v="manual">手动对齐</button>
-  </div>
-  <div class="grp" id="grpFocus">
-    <button data-v="all" class="on">同步</button><button data-v="A">图A</button><button data-v="B">图B</button>
+  <div class="brow" id="rowGroups">
+    <div class="grp" id="grpView">
+      <button data-v="overlap" class="on">重叠</button><button data-v="hsplit">左右</button><button data-v="vsplit">上下</button>
+    </div>
+    <div class="grp" id="grpAlign">
+      <button data-v="auto" class="on">自动对齐</button><button data-v="manual">手动对齐</button>
+    </div>
+    <div class="grp" id="grpFocus">
+      <button data-v="all" class="on">同步</button><button data-v="A">图A</button><button data-v="B">图B</button>
+    </div>
   </div>
   <label class="th">差异阈值
     <input type="range" id="thRange" min="0" max="120" value="20">
     <span class="v" id="thVal">20</span>
   </label>
-  <div class="slot">
+  <div class="brow">
     <span class="tag">B</span>
     <button class="pick" id="pickB">选择图片</button>
     <span class="meta" id="metaB"></span>
@@ -136,7 +140,7 @@
 <input type="file" id="inputB" accept="image/*" hidden>
 <script>
 "use strict";
-/* img-diff v0.2.1 — 离线单文件图片对比工具
+/* img-diff v0.2.2 — 离线单文件图片对比工具
    差异检测：对齐网格上逐像素比对原始 RGB（彩色），显示层转灰度。
    差异着色：重叠=亮紫；并排=本图数值更小亮蓝 / 更大亮红（亮度相同仅色相不同=紫）。
    对齐：自动 = 两图拉伸到同一矩形网格；手动 = 每图 2 锚点解相似变换(平移+缩放+旋转)，
