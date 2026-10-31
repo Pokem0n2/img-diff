@@ -195,7 +195,7 @@ const H = window.__imgdiff;
   {
     document.querySelector('#grpView button[data-v="hsplit"]').click();
     ok('hsplit-2canvases', document.querySelectorAll('#stage canvas').length === 2, document.querySelectorAll('#stage canvas').length);
-    ok('hsplit-grpShow-hidden', document.getElementById('grpShow').hidden === true);
+    ok('grpShow-removed', document.getElementById('grpShow') === null);
     document.querySelector('#grpView button[data-v="vsplit"]').click();
     ok('vsplit-class', document.getElementById('stage').className === 'vsplit', document.getElementById('stage').className);
     document.querySelector('#grpView button[data-v="overlap"]').click();

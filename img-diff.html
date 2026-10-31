@@ -93,9 +93,6 @@
   <div class="grp" id="grpView">
     <button data-v="overlap" class="on">重叠</button><button data-v="hsplit">左右</button><button data-v="vsplit">上下</button>
   </div>
-  <div class="grp" id="grpShow">
-    <button data-v="A">A</button><button data-v="mix" class="on">混合</button><button data-v="B">B</button>
-  </div>
   <div class="grp" id="grpAlign">
     <button data-v="auto" class="on">自动对齐</button><button data-v="manual">手动对齐</button>
   </div>
@@ -139,7 +136,7 @@
 <input type="file" id="inputB" accept="image/*" hidden>
 <script>
 "use strict";
-/* img-diff v0.2.0 — 离线单文件图片对比工具
+/* img-diff v0.2.1 — 离线单文件图片对比工具
    差异检测：对齐网格上逐像素比对原始 RGB（彩色），显示层转灰度。
    差异着色：重叠=亮紫；并排=本图数值更小亮蓝 / 更大亮红（亮度相同仅色相不同=紫）。
    对齐：自动 = 两图拉伸到同一矩形网格；手动 = 每图 2 锚点解相似变换(平移+缩放+旋转)，
@@ -148,7 +145,7 @@
 (function () {
   var els = {};
   ['bar','stage','empty','emptyHint','pickBoth','pickA','pickB','metaA','metaB',
-   'grpFocus','grpView','grpShow','grpAlign','thRange','thVal',
+   'grpFocus','grpView','grpAlign','thRange','thVal',
    'ao','aoTabs','aoStatus','aoMsg','aoReset','aoCancel','aoConfirm','aoCanvas',
    'inputBoth','inputA','inputB'].forEach(function (id) { els[id] = document.getElementById(id); });
 
@@ -164,7 +161,6 @@
     anchors: { A: [], B: [] },           // [{x:int, y:int}] 源像素坐标
     focus: 'all',                        // 'all' | 'A' | 'B'
     viewMode: 'overlap',                 // 'overlap' | 'hsplit' | 'vsplit'
-    overlapShow: 'mix',                  // 'A' | 'B' | 'mix'
     tf: { all: null, A: null, B: null }  // {s, tx, ty} css 像素
   };
 
@@ -442,12 +438,10 @@
         ctx.strokeRect(t.tx + 0.5, t.ty + 0.5, g.w * t.s, g.h * t.s);
       };
       if (cv.which === 'AB') {
-        if (S.overlapShow !== 'B') drawLayer('A');
-        if (S.overlapShow !== 'A') {
-          if (S.overlapShow === 'mix') ctx.globalAlpha = 0.5;
-          drawLayer('B');
-          ctx.globalAlpha = 1;
-        }
+        drawLayer('A');
+        ctx.globalAlpha = 0.5;
+        drawLayer('B');
+        ctx.globalAlpha = 1;
         var tRed = effTf(S.focus === 'all' ? 'A' : S.focus);
         drawDiff(tRed, S.diffLayers.overlap); drawBorder(effTf('A'));
       } else {
@@ -804,10 +798,8 @@
     els.pickBoth.textContent = (S.imgs.A && !S.imgs.B) ? '选择图B' : '选择两张图片';
     setGrp(els.grpFocus, S.focus);
     setGrp(els.grpView, S.viewMode);
-    setGrp(els.grpShow, S.overlapShow);
     setGrp(els.grpAlign, S.align);
-    els.grpShow.hidden = S.viewMode !== 'overlap';
-    var groups = [els.grpFocus, els.grpView, els.grpShow, els.grpAlign];
+    var groups = [els.grpFocus, els.grpView, els.grpAlign];
     for (var g = 0; g < groups.length; g++) {
       var btns = groups[g].querySelectorAll('button');
       for (var b = 0; b < btns.length; b++) btns[b].disabled = !bl;
@@ -828,13 +820,6 @@
     S.viewMode = btn.dataset.v;
     buildStage();
     updateBar();
-  });
-  els.grpShow.addEventListener('click', function (e) {
-    var btn = e.target.closest('button');
-    if (!btn || btn.disabled) return;
-    S.overlapShow = btn.dataset.v;
-    updateBar();
-    requestRender();
   });
   els.grpAlign.addEventListener('click', function (e) {
     var btn = e.target.closest('button');
