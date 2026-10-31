@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="color-scheme" content="light">
+<title>图片对比</title>
+<style>
+  :root {
+    --bg: #f7f2e9;
+    --panel: #fffdf8;
+    --border: #e3d9c8;
+    --text: #3b342b;
+    --muted: #8d8272;
+    --accent: #b45309;
+    --accent-soft: #f5e5cf;
+    --red: #d32f2f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    background: var(--bg); color: var(--text);
+    display: flex; flex-direction: column;
+    height: 100dvh; overflow: hidden;
+    font-size: 14px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding: 8px 10px; background: var(--panel); border-bottom: 1px solid var(--border);
+  }
+  .slot { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .tag {
+    flex: none; width: 20px; height: 20px; border-radius: 5px;
+    background: var(--accent-soft); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 12px;
+  }
+  .pick {
+    max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    border-radius: 7px; padding: 5px 10px; font-size: 13px; cursor: pointer;
+  }
+  .pick:hover { border-color: var(--accent); }
+  .meta { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .grp { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--panel); }
+  .grp button {
+    border: none; border-right: 1px solid var(--border); background: transparent;
+    padding: 5px 11px; font-size: 13px; color: var(--muted); cursor: pointer;
+  }
+  .grp button:last-child { border-right: none; }
+  .grp button.on { background: var(--accent); color: #fff; }
+  .grp button:disabled { opacity: 0.35; cursor: default; }
+  .th { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+  .th input[type="range"] { width: 110px; accent-color: var(--accent); }
+  .th .v { min-width: 2.2em; text-align: right; color: var(--text); }
+  #stage { flex: 1; min-height: 0; display: flex; }
+  #stage.hsplit { flex-direction: row; }
+  #stage.vsplit { flex-direction: column; }
+  .cv { flex: 1 1 0; min-width: 0; min-height: 0; display: block; touch-action: none; background: #efe8db; }
+  #stage.hsplit .cv + .cv { border-left: 1px solid var(--border); }
+  #stage.vsplit .cv + .cv { border-top: 1px solid var(--border); }
+  #empty { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 5; }
+  .card { text-align: center; padding: 42px 52px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; }
+  .card .big {
+    font-size: 16px; padding: 12px 30px; background: var(--accent); color: #fff;
+    border: none; border-radius: 9px; cursor: pointer;
+  }
+  .card .hint { margin-top: 14px; color: var(--muted); font-size: 13px; }
+  #ao { position: fixed; inset: 0; z-index: 10; background: var(--bg); display: flex; flex-direction: column; }
+  .ao-bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    padding: 8px 10px; background: var(--panel); border-bottom: 1px solid var(--border);
+  }
+  .ao-status { color: var(--muted); font-size: 13px; }
+  .ao-msg { color: var(--red); font-size: 13px; }
+  .ao-actions { display: flex; gap: 8px; margin-left: auto; }
+  .ao-actions button { border-radius: 8px; padding: 6px 14px; font-size: 13px; cursor: pointer; border: 1px solid var(--border); background: var(--panel); color: var(--text); }
+  .ao-actions .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .ao-actions .primary:disabled { opacity: 0.35; cursor: default; }
+  #aoCanvas { flex: 1; min-height: 0; display: block; touch-action: none; background: #262119; }
+</style>
+</head>
+<body>
+<header id="bar">
+  <div class="slot">
+    <span class="tag">A</span>
+    <button class="pick" id="pickA">选择图片</button>
+    <span class="meta" id="metaA"></span>
+  </div>
+  <div class="grp" id="grpFocus">
+    <button data-v="all" class="on">同步</button><button data-v="A">图A</button><button data-v="B">图B</button>
+  </div>
+  <div class="grp" id="grpView">
+    <button data-v="overlap" class="on">重叠</button><button data-v="hsplit">左右</button><button data-v="vsplit">上下</button>
+  </div>
+  <div class="grp" id="grpShow">
+    <button data-v="A">A</button><button data-v="mix" class="on">混合</button><button data-v="B">B</button>
+  </div>
+  <div class="grp" id="grpAlign">
+    <button data-v="auto" class="on">自动对齐</button><button data-v="manual">手动对齐</button>
+  </div>
+  <label class="th">差异阈值
+    <input type="range" id="thRange" min="0" max="120" value="20">
+    <span class="v" id="thVal">20</span>
+  </label>
+  <div class="slot">
+    <span class="tag">B</span>
+    <button class="pick" id="pickB">选择图片</button>
+    <span class="meta" id="metaB"></span>
+  </div>
+</header>
+<main id="stage"></main>
+<div id="empty">
+  <div class="card">
+    <button class="big" id="pickBoth">选择两张图片</button>
+    <div class="hint" id="emptyHint">或直接把两张图片拖进本页</div>
+  </div>
+</div>
+<div id="ao" hidden>
+  <div class="ao-bar">
+    <div class="grp" id="aoTabs">
+      <button data-img="A" class="on">图A</button><button data-img="B">图B</button>
+    </div>
+    <span class="ao-status" id="aoStatus"></span>
+    <span class="ao-msg" id="aoMsg"></span>
+    <div class="ao-actions">
+      <button id="aoReset">重置锚点</button>
+      <button id="aoCancel">取消</button>
+      <button id="aoConfirm" class="primary" disabled>确认对齐</button>
+    </div>
+  </div>
+  <canvas id="aoCanvas"></canvas>
+</div>
+<input type="file" id="inputBoth" accept="image/*" multiple hidden>
+<input type="file" id="inputA" accept="image/*" hidden>
+<input type="file" id="inputB" accept="image/*" hidden>
+<script>
+"use strict";
+/* img-diff v1.0.0 — 离线单文件图片对比工具
+   差异检测：对齐网格上逐像素比对原始 RGB（彩色），显示层转灰度，差异像素标红。
+   对齐：自动 = 两图拉伸到同一矩形网格；手动 = 每图 2 锚点解相似变换(平移+缩放+旋转)，
+         图B warp 到图A 的网格。 */
+
+(function () {
+  var els = {};
+  ['bar','stage','empty','emptyHint','pickBoth','pickA','pickB','metaA','metaB',
+   'grpFocus','grpView','grpShow','grpAlign','thRange','thVal',
+   'ao','aoTabs','aoStatus','aoMsg','aoReset','aoCancel','aoConfirm','aoCanvas',
+   'inputBoth','inputA','inputB'].forEach(function (id) { els[id] = document.getElementById(id); });
+
+  var S = {
+    imgs: { A: null, B: null },          // {bitmap, w, h, name}
+    align: 'auto',                       // 'auto' | 'manual'
+    grid: { w: 0, h: 0 },                // 比较网格
+    layer: { A: null, B: null },         // {color: ImageData, gray: canvas, mask: Uint8Array}
+    diffMask: null,
+    diffCanvas: null,
+    threshold: 20,
+    anchors: { A: [], B: [] },           // [{x:int, y:int}] 源像素坐标
+    focus: 'all',                        // 'all' | 'A' | 'B'
+    viewMode: 'overlap',                 // 'overlap' | 'hsplit' | 'vsplit'
+    overlapShow: 'mix',                  // 'A' | 'B' | 'mix'
+    tf: { all: null, A: null, B: null }  // {s, tx, ty} css 像素
+  };
+
+  function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+  function bothLoaded() { return !!(S.imgs.A && S.imgs.B); }
+
+  /* ---------- 图像加载 ---------- */
+  function fileToImage(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var im = new Image();
+      im.onload = function () {
+        resolve({ bitmap: im, w: im.naturalWidth, h: im.naturalHeight, name: file.name });
+        setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+      };
+      im.onerror = function () { URL.revokeObjectURL(url); reject(new Error('decode failed: ' + file.name)); };
+      im.src = url;
+    });
+  }
+
+  async function loadToSlot(slot, file) {
+    try {
+      S.imgs[slot] = await fileToImage(file);
+      S.anchors[slot] = [];
+      if (bothLoaded()) { S.align = 'auto'; setupAlignment(); }
+      updateBar();
+    } catch (e) {
+      els[slot === 'A' ? 'metaA' : 'metaB'].textContent = '无法解码';
+    }
+  }
+
+  /* ---------- 对齐 ---------- */
+  function capScale(w, h) {
+    var MAX = 15000000;
+    if (w * h <= MAX) return 1;
+    return Math.sqrt(MAX / (w * h));
+  }
+
+  // 解相似变换 M：M(b1)=a1, M(b2)=a2（平移+均匀缩放+旋转），锚点取像素中心
+  function solveAnchors() {
+    var aa = S.anchors.A, bb = S.anchors.B;
+    if (!aa || aa.length !== 2 || !bb || bb.length !== 2) return null;
+    var a1 = aa[0], a2 = aa[1], b1 = bb[0], b2 = bb[1];
+    var dax = a2.x - a1.x, day = a2.y - a1.y;
+    var dbx = b2.x - b1.x, dby = b2.y - b1.y;
+    var la = Math.hypot(dax, day), lb = Math.hypot(dbx, dby);
+    if (la < 0.5 || lb < 0.5) return null;
+    var s = la / lb;
+    var th = Math.atan2(day, dax) - Math.atan2(dby, dbx);
+    var c = Math.cos(th) * s, sn = Math.sin(th) * s;
+    var fx = b1.x + 0.5, fy = b1.y + 0.5;
+    var ax = a1.x + 0.5, ay = a1.y + 0.5;
+    return new DOMMatrix([c, sn, -sn, c, ax - (c * fx - sn * fy), ay - (sn * fx + c * fy)]);
+  }
+
+  function rasterize(bmp, sw, sh, gw, gh, m) {
+    var c = document.createElement('canvas');
+    c.width = gw; c.height = gh;
+    var ctx = c.getContext('2d', { willReadFrequently: true });
+    if (m) ctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
+    else ctx.setTransform(gw / sw, 0, 0, gh / sh, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bmp, 0, 0);
+    return ctx.getImageData(0, 0, gw, gh);
+  }
+
+  function alphaMask(id) {
+    var n = id.width * id.height, d = id.data, m = new Uint8Array(n);
+    for (var i = 0, p = 3; i < n; i++, p += 4) m[i] = d[p] >= 248 ? 1 : 0;
+    return m;
+  }
+
+  function grayCanvas(id) {
+    var w = id.width, h = id.height;
+    var c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    var ctx = c.getContext('2d');
+    var d = id.data, out = new Uint8ClampedArray(d.length);
+    for (var p = 0; p < d.length; p += 4) {
+      var g = (d[p] * 77 + d[p + 1] * 150 + d[p + 2] * 29) >> 8;
+      out[p] = out[p + 1] = out[p + 2] = g;
+      out[p + 3] = d[p + 3];
+    }
+    ctx.putImageData(new ImageData(out, w, h), 0, 0);
+    return c;
+  }
+
+  function setupAlignment() {
+    var A = S.imgs.A, B = S.imgs.B;
+    if (!A || !B) { S.layer = { A: null, B: null }; S.diffMask = null; buildStage(); return; }
+    var gw, gh, mA = null, mB = null;
+    if (S.align === 'manual') {
+      var m = solveAnchors();
+      if (!m) { S.align = 'auto'; }
+      else {
+        var k = capScale(A.w, A.h);
+        gw = Math.max(1, Math.round(A.w * k));
+        gh = Math.max(1, Math.round(A.h * k));
+        if (k !== 1) { mA = new DOMMatrix([k, 0, 0, k, 0, 0]); mB = new DOMMatrix([k, 0, 0, k, 0, 0]).multiply(m); }
+        else { mB = m; }
+      }
+    }
+    if (S.align === 'auto') {
+      var W = Math.max(A.w, B.w), H = Math.max(A.h, B.h);
+      var k2 = capScale(W, H);
+      gw = Math.max(1, Math.round(W * k2));
+      gh = Math.max(1, Math.round(H * k2));
+    }
+    var rA = rasterize(A.bitmap, A.w, A.h, gw, gh, mA);
+    var rB = rasterize(B.bitmap, B.w, B.h, gw, gh, mB);
+    S.grid = { w: gw, h: gh };
+    S.layer = {
+      A: { color: rA, gray: grayCanvas(rA), mask: alphaMask(rA) },
+      B: { color: rB, gray: grayCanvas(rB), mask: alphaMask(rB) }
+    };
+    computeDiff();
+    buildStage();
+    updateBar();
+  }
+
+  /* ---------- 差异计算（彩色逐通道比对） ---------- */
+  function computeDiff() {
+    if (!S.layer.A || !S.layer.B) { S.diffMask = null; return; }
+    var w = S.grid.w, h = S.grid.h, n = w * h;
+    var dA = S.layer.A.color.data, dB = S.layer.B.color.data;
+    var mA = S.layer.A.mask, mB = S.layer.B.mask;
+    var mask = new Uint8Array(n);
+    var t = S.threshold;
+    for (var i = 0, p = 0; i < n; i++, p += 4) {
+      if (!(mA[i] && mB[i])) continue;
+      var dr = dA[p] - dB[p], dg = dA[p + 1] - dB[p + 1], db = dA[p + 2] - dB[p + 2];
+      if (dr > t || dr < -t || dg > t || dg < -t || db > t || db < -t) mask[i] = 1;
+    }
+    S.diffMask = mask;
+    var c = S.diffCanvas || (S.diffCanvas = document.createElement('canvas'));
+    c.width = w; c.height = h;
+    var ctx = c.getContext('2d');
+    var img = ctx.createImageData(w, h), dd = img.data;
+    for (var j = 0, q = 0; j < n; j++, q += 4) {
+      if (mask[j]) { dd[q] = 211; dd[q + 1] = 47; dd[q + 2] = 47; dd[q + 3] = 255; }
+    }
+    ctx.putImageData(img, 0, 0);
+    requestRender();
+  }
+
+  var diffPending = false;
+  function scheduleDiff() {
+    if (diffPending) return;
+    diffPending = true;
+    requestAnimationFrame(function () { diffPending = false; computeDiff(); });
+  }
+
+  /* ---------- 主视图 ---------- */
+  var canvases = [];
+
+  function buildStage() {
+    var stage = els.stage;
+    stage.innerHTML = '';
+    stage.className = S.viewMode;
+    canvases = [];
+    if (!bothLoaded()) return;
+    var mk = function (which) {
+      var el = document.createElement('canvas');
+      el.className = 'cv';
+      stage.appendChild(el);
+      var cv = { el: el, ctx: el.getContext('2d'), which: which };
+      attachGestures(cv);
+      canvases.push(cv);
+    };
+    if (S.viewMode === 'overlap') mk('AB');
+    else { mk('A'); mk('B'); }
+    resetViews();
+    requestRender();
+  }
+
+  function primaryEl() { return canvases.length ? canvases[0].el : null; }
+
+  function fitTf(el) {
+    if (!el) return null;
+    var cw = el.clientWidth, ch = el.clientHeight;
+    if (cw < 4 || ch < 4 || !S.grid.w) return null;
+    var s = Math.min(cw / S.grid.w, ch / S.grid.h) * 0.94;
+    return { s: s, tx: (cw - S.grid.w * s) / 2, ty: (ch - S.grid.h * s) / 2 };
+  }
+
+  function matTf(k) {
+    if (k === 'all') {
+      if (!S.tf.all) { var f = fitTf(primaryEl()); if (f) S.tf.all = f; }
+      return S.tf.all;
+    }
+    if (!S.tf[k]) {
+      var base = S.tf.all || matTf('all');
+      if (!base) return null;
+      S.tf[k] = { s: base.s, tx: base.tx, ty: base.ty };
+    }
+    return S.tf[k];
+  }
+
+  function effTf(i) { return S.focus === 'all' ? matTf('all') : matTf(i); }
+  function gestureTf(whichEl) { return matTf(S.focus === 'all' ? 'all' : whichEl); }
+
+  function resetViews() { S.tf = { all: null, A: null, B: null }; }
+
+  function sizeCanvasEl(el) {
+    var dpr = window.devicePixelRatio || 1;
+    var r = el.getBoundingClientRect();
+    var w = Math.max(1, Math.round(r.width * dpr));
+    var h = Math.max(1, Math.round(r.height * dpr));
+    if (el.width !== w || el.height !== h) { el.width = w; el.height = h; }
+  }
+
+  function render() {
+    if (!els.ao.hidden) aoDraw();
+    if (!canvases.length) return;
+    var dpr = window.devicePixelRatio || 1;
+    for (var ci = 0; ci < canvases.length; ci++) {
+      var cv = canvases[ci], ctx = cv.ctx;
+      sizeCanvasEl(cv.el);
+      var cw = cv.el.clientWidth, ch = cv.el.clientHeight;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, cw, ch);
+      ctx.fillStyle = '#efe8db';
+      ctx.fillRect(0, 0, cw, ch);
+      if (!S.layer.A) continue;
+      var g = S.grid;
+      var drawLayer = function (which) {
+        var t = effTf(which);
+        if (!t) return;
+        ctx.setTransform(dpr * t.s, 0, 0, dpr * t.s, dpr * t.tx, dpr * t.ty);
+        ctx.imageSmoothingEnabled = t.s < 3;
+        ctx.drawImage(S.layer[which].gray, 0, 0);
+      };
+      var drawDiff = function (t) {
+        if (!t) return;
+        ctx.setTransform(dpr * t.s, 0, 0, dpr * t.s, dpr * t.tx, dpr * t.ty);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(S.diffCanvas, 0, 0);
+      };
+      var drawBorder = function (t) {
+        if (!t) return;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.strokeStyle = 'rgba(80,66,50,0.35)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(t.tx + 0.5, t.ty + 0.5, g.w * t.s, g.h * t.s);
+      };
+      if (cv.which === 'AB') {
+        if (S.overlapShow !== 'B') drawLayer('A');
+        if (S.overlapShow !== 'A') {
+          if (S.overlapShow === 'mix') ctx.globalAlpha = 0.5;
+          drawLayer('B');
+          ctx.globalAlpha = 1;
+        }
+        var tRed = effTf(S.focus === 'all' ? 'A' : S.focus);
+        drawDiff(tRed); drawBorder(effTf('A'));
+      } else {
+        drawLayer(cv.which);
+        var t2 = effTf(cv.which);
+        drawDiff(t2); drawBorder(t2);
+      }
+    }
+  }
+
+  var renderQueued = false;
+  function requestRender() {
+    if (renderQueued) return;
+    renderQueued = true;
+    requestAnimationFrame(function () { renderQueued = false; render(); });
+  }
+
+  function zoomAt(cv, cx, cy, f) {
+    var t = gestureTf(cv.which);
+    if (!t) return;
+    var r = cv.el.getBoundingClientRect();
+    var x = cx - r.left, y = cy - r.top;
+    var s2 = clamp(t.s * f, 0.02, 500);
+    var k = s2 / t.s;
+    t.tx = x - (x - t.tx) * k;
+    t.ty = y - (y - t.ty) * k;
+    t.s = s2;
+    requestRender();
+  }
+
+  function attachGestures(cv) {
+    var el = cv.el;
+    var ptrs = new Map();
+    var pinch = null;
+    el.addEventListener('pointerdown', function (e) {
+      if (!S.layer.A) return;
+      el.setPointerCapture(e.pointerId);
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (ptrs.size === 2) {
+        var p1 = ptrs.get(e.pointerId);
+        var other = null;
+        ptrs.forEach(function (v, k) { if (k !== e.pointerId) other = v; });
+        pinch = { d: Math.hypot(p1.x - other.x, p1.y - other.y), mx: (p1.x + other.x) / 2, my: (p1.y + other.y) / 2 };
+      }
+    });
+    el.addEventListener('pointermove', function (e) {
+      if (!ptrs.has(e.pointerId)) return;
+      var rec = ptrs.get(e.pointerId);
+      var nx = e.clientX, ny = e.clientY;
+      if (ptrs.size >= 2 && pinch) {
+        rec.x = nx; rec.y = ny;
+        var pts = [];
+        ptrs.forEach(function (v) { pts.push(v); });
+        var d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        var mx = (pts[0].x + pts[1].x) / 2, my = (pts[0].y + pts[1].y) / 2;
+        if (pinch.d > 0) zoomAt(cv, pinch.mx, pinch.my, d / pinch.d);
+        var t = gestureTf(cv.which);
+        if (t) { t.tx += mx - pinch.mx; t.ty += my - pinch.my; }
+        pinch = { d: d, mx: mx, my: my };
+        requestRender();
+        return;
+      }
+      if (ptrs.size === 1) {
+        var t1 = gestureTf(cv.which);
+        if (t1) { t1.tx += nx - rec.x; t1.ty += ny - rec.y; requestRender(); }
+      }
+      rec.x = nx; rec.y = ny;
+    });
+    var up = function (e) {
+      ptrs.delete(e.pointerId);
+      if (ptrs.size < 2) pinch = null;
+    };
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('wheel', function (e) {
+      if (!S.layer.A) return;
+      e.preventDefault();
+      zoomAt(cv, e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0016));
+    }, { passive: false });
+  }
+
+  /* ---------- 手动对齐标定界面 ---------- */
+  var ao = { img: 'A', tf: { A: null, B: null }, active: -1, drag: -1 };
+  var aoCtx = els.aoCanvas.getContext('2d');
+
+  function aoTf() {
+    var img = S.imgs[ao.img];
+    if (!img) return null;
+    if (!ao.tf[ao.img]) {
+      var cw = els.aoCanvas.clientWidth, ch = els.aoCanvas.clientHeight;
+      if (cw < 4 || ch < 4) return null;
+      var s = Math.min(cw / img.w, ch / img.h) * 0.9;
+      ao.tf[ao.img] = { s: s, tx: (cw - img.w * s) / 2, ty: (ch - img.h * s) / 2 };
+    }
+    return ao.tf[ao.img];
+  }
+
+  function aoOpen() {
+    if (!bothLoaded()) return;
+    ao.tf = { A: null, B: null };
+    ao.active = -1; ao.drag = -1;
+    els.ao.hidden = false;
+    aoSync();
+    requestRender();
+  }
+  function aoClose() { els.ao.hidden = true; requestRender(); }
+
+  function aoSync() {
+    var a = S.anchors.A.length, b = S.anchors.B.length;
+    var btns = els.aoTabs.querySelectorAll('button');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle('on', btns[i].dataset.img === ao.img);
+    }
+    els.aoStatus.textContent = '图A ' + a + '/2 · 图B ' + b + '/2';
+    els.aoConfirm.disabled = !(a === 2 && b === 2);
+    els.aoMsg.textContent = '';
+  }
+
+  function aoSrcOf(cx, cy) {
+    var t = aoTf(); if (!t) return null;
+    var img = S.imgs[ao.img];
+    var r = els.aoCanvas.getBoundingClientRect();
+    var x = Math.round((cx - r.left - t.tx) / t.s - 0.5);
+    var y = Math.round((cy - r.top - t.ty) / t.s - 0.5);
+    return { x: clamp(x, 0, img.w - 1), y: clamp(y, 0, img.h - 1) };
+  }
+
+  function hitAnchor(cx, cy) {
+    var t = aoTf(); if (!t) return -1;
+    var r = els.aoCanvas.getBoundingClientRect();
+    var list = S.anchors[ao.img];
+    var best = -1, bd = 18;
+    for (var i = 0; i < list.length; i++) {
+      var sx = r.left + t.tx + (list[i].x + 0.5) * t.s;
+      var sy = r.top + t.ty + (list[i].y + 0.5) * t.s;
+      var d = Math.hypot(cx - sx, cy - sy);
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  }
+
+  function aoDraw() {
+    var el = els.aoCanvas;
+    sizeCanvasEl(el);
+    var dpr = window.devicePixelRatio || 1;
+    var cw = el.clientWidth, ch = el.clientHeight;
+    aoCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    aoCtx.fillStyle = '#262119';
+    aoCtx.fillRect(0, 0, cw, ch);
+    var img = S.imgs[ao.img];
+    if (!img) return;
+    var t = aoTf();
+    if (!t) return;
+    aoCtx.setTransform(dpr * t.s, 0, 0, dpr * t.s, dpr * t.tx, dpr * t.ty);
+    aoCtx.imageSmoothingEnabled = t.s < 3;
+    aoCtx.drawImage(img.bitmap, 0, 0);
+    aoCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (t.s >= 8) {
+      aoCtx.strokeStyle = 'rgba(255,248,235,0.22)';
+      aoCtx.lineWidth = 1;
+      var x0 = Math.max(0, Math.floor(-t.tx / t.s));
+      var x1 = Math.min(img.w, Math.ceil((cw - t.tx) / t.s));
+      var y0 = Math.max(0, Math.floor(-t.ty / t.s));
+      var y1 = Math.min(img.h, Math.ceil((ch - t.ty) / t.s));
+      aoCtx.beginPath();
+      for (var gx = x0; gx <= x1; gx++) {
+        var sx = Math.round(t.tx + gx * t.s) + 0.5;
+        aoCtx.moveTo(sx, 0); aoCtx.lineTo(sx, ch);
+      }
+      for (var gy = y0; gy <= y1; gy++) {
+        var sy = Math.round(t.ty + gy * t.s) + 0.5;
+        aoCtx.moveTo(0, sy); aoCtx.lineTo(cw, sy);
+      }
+      aoCtx.stroke();
+    }
+    var list = S.anchors[ao.img];
+    for (var i = 0; i < list.length; i++) {
+      var ax = t.tx + (list[i].x + 0.5) * t.s;
+      var ay = t.ty + (list[i].y + 0.5) * t.s;
+      var col = (i === ao.active || i === ao.drag) ? '#ff5252' : '#ffb74d';
+      aoCtx.strokeStyle = col;
+      aoCtx.lineWidth = 1.6;
+      aoCtx.beginPath();
+      aoCtx.moveTo(ax - 16, ay); aoCtx.lineTo(ax + 16, ay);
+      aoCtx.moveTo(ax, ay - 16); aoCtx.lineTo(ax, ay + 16);
+      aoCtx.stroke();
+      aoCtx.beginPath();
+      aoCtx.arc(ax, ay, 5, 0, Math.PI * 2);
+      aoCtx.stroke();
+      var label = (i + 1) + ' (' + list[i].x + ',' + list[i].y + ')';
+      aoCtx.font = '12px system-ui, sans-serif';
+      var lw = aoCtx.measureText(label).width + 10;
+      aoCtx.fillStyle = 'rgba(38,33,25,0.85)';
+      aoCtx.fillRect(ax + 8, ay - 27, lw, 18);
+      aoCtx.fillStyle = '#ffe0b2';
+      aoCtx.fillText(label, ax + 13, ay - 14);
+    }
+  }
+
+  (function initAoEvents() {
+    var el = els.aoCanvas;
+    var ptrs = new Map();
+    var pinch = null, down = null;
+    el.addEventListener('pointerdown', function (e) {
+      el.setPointerCapture(e.pointerId);
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (ptrs.size === 1) {
+        var hit = hitAnchor(e.clientX, e.clientY);
+        down = { x: e.clientX, y: e.clientY, moved: false, hit: hit };
+        if (hit >= 0) { ao.drag = hit; ao.active = hit; requestRender(); }
+      } else {
+        down = null; ao.drag = -1;
+        if (ptrs.size === 2) {
+          var pts = [];
+          ptrs.forEach(function (v) { pts.push(v); });
+          pinch = {
+            d: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+            mx: (pts[0].x + pts[1].x) / 2, my: (pts[0].y + pts[1].y) / 2
+          };
+        }
+      }
+    });
+    el.addEventListener('pointermove', function (e) {
+      if (!ptrs.has(e.pointerId)) return;
+      var rec = ptrs.get(e.pointerId);
+      var nx = e.clientX, ny = e.clientY;
+      if (ptrs.size >= 2 && pinch) {
+        rec.x = nx; rec.y = ny;
+        var pts = [];
+        ptrs.forEach(function (v) { pts.push(v); });
+        var d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        var mx = (pts[0].x + pts[1].x) / 2, my = (pts[0].y + pts[1].y) / 2;
+        var t = aoTf();
+        if (t && pinch.d > 0) {
+          var r = el.getBoundingClientRect();
+          var px = pinch.mx - r.left, py = pinch.my - r.top;
+          var s2 = clamp(t.s * d / pinch.d, 0.02, 500);
+          var k = s2 / t.s;
+          t.tx = px - (px - t.tx) * k;
+          t.ty = py - (py - t.ty) * k;
+          t.s = s2;
+        }
+        if (t) { t.tx += mx - pinch.mx; t.ty += my - pinch.my; }
+        pinch = { d: d, mx: mx, my: my };
+        requestRender();
+        return;
+      }
+      if (ptrs.size === 1) {
+        if (ao.drag >= 0) {
+          var src = aoSrcOf(nx, ny);
+          if (src) {
+            var a = S.anchors[ao.img][ao.drag];
+            if (a.x !== src.x || a.y !== src.y) { a.x = src.x; a.y = src.y; aoSync(); requestRender(); }
+          }
+        } else if (down) {
+          if (!down.moved && Math.hypot(nx - down.x, ny - down.y) > 6) down.moved = true;
+          if (down.moved) {
+            var t1 = aoTf();
+            if (t1) { t1.tx += nx - rec.x; t1.ty += ny - rec.y; requestRender(); }
+          }
+        }
+      }
+      rec.x = nx; rec.y = ny;
+    });
+    var up = function (e) {
+      if (down && !down.moved && ptrs.size === 1 && ao.drag < 0) {
+        var src = aoSrcOf(e.clientX, e.clientY);
+        if (src && S.anchors[ao.img].length < 2) {
+          S.anchors[ao.img].push(src);
+          ao.active = S.anchors[ao.img].length - 1;
+          aoSync();
+          requestRender();
+        }
+      }
+      ptrs.delete(e.pointerId);
+      if (ptrs.size < 2) pinch = null;
+      if (ptrs.size === 0) { down = null; ao.drag = -1; }
+    };
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      var t = aoTf();
+      if (!t) return;
+      var r = el.getBoundingClientRect();
+      var px = e.clientX - r.left, py = e.clientY - r.top;
+      var s2 = clamp(t.s * Math.exp(-e.deltaY * 0.0016), 0.02, 500);
+      var k = s2 / t.s;
+      t.tx = px - (px - t.tx) * k;
+      t.ty = py - (py - t.ty) * k;
+      t.s = s2;
+      requestRender();
+    }, { passive: false });
+  })();
+
+  window.addEventListener('keydown', function (e) {
+    if (els.ao.hidden) return;
+    if (e.key === 'Escape') { aoClose(); return; }
+    var list = S.anchors[ao.img];
+    if (ao.active < 0 || !list[ao.active]) return;
+    var step = e.shiftKey ? 10 : 1;
+    var img = S.imgs[ao.img];
+    var a = list[ao.active];
+    if (e.key === 'ArrowLeft') a.x = clamp(a.x - step, 0, img.w - 1);
+    else if (e.key === 'ArrowRight') a.x = clamp(a.x + step, 0, img.w - 1);
+    else if (e.key === 'ArrowUp') a.y = clamp(a.y - step, 0, img.h - 1);
+    else if (e.key === 'ArrowDown') a.y = clamp(a.y + step, 0, img.h - 1);
+    else return;
+    e.preventDefault();
+    aoSync();
+    requestRender();
+  });
+
+  els.aoTabs.addEventListener('click', function (e) {
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    ao.img = btn.dataset.img;
+    ao.active = -1; ao.drag = -1;
+    aoSync();
+    requestRender();
+  });
+  els.aoReset.addEventListener('click', function () {
+    S.anchors[ao.img] = [];
+    ao.active = -1; ao.drag = -1;
+    aoSync();
+    requestRender();
+  });
+  els.aoCancel.addEventListener('click', aoClose);
+  els.aoConfirm.addEventListener('click', function () {
+    var m = solveAnchors();
+    if (!m) { els.aoMsg.textContent = '同一张图的两个锚点距离过近，无法解算'; return; }
+    els.ao.hidden = true;
+    S.align = 'manual';
+    setupAlignment();
+  });
+
+  /* ---------- 工具栏 ---------- */
+  function setGrp(grp, val) {
+    var btns = grp.querySelectorAll('button');
+    for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('on', btns[i].dataset.v === val);
+  }
+
+  function updateBar() {
+    var bl = bothLoaded();
+    var pairs = [[els.pickA, els.metaA, S.imgs.A], [els.pickB, els.metaB, S.imgs.B]];
+    for (var i = 0; i < pairs.length; i++) {
+      var pick = pairs[i][0], meta = pairs[i][1], img = pairs[i][2];
+      pick.textContent = img ? img.name : '选择图片';
+      pick.title = img ? img.name + '（点击替换）' : '';
+      meta.textContent = img ? img.w + '×' + img.h : '';
+    }
+    els.empty.hidden = bl;
+    els.emptyHint.textContent = bl ? '' : (S.imgs.A && !S.imgs.B ? '图A已就绪，请再选择一张作为图B' : '或直接把两张图片拖进本页');
+    els.pickBoth.textContent = (S.imgs.A && !S.imgs.B) ? '选择图B' : '选择两张图片';
+    setGrp(els.grpFocus, S.focus);
+    setGrp(els.grpView, S.viewMode);
+    setGrp(els.grpShow, S.overlapShow);
+    setGrp(els.grpAlign, S.align);
+    els.grpShow.hidden = S.viewMode !== 'overlap';
+    var groups = [els.grpFocus, els.grpView, els.grpShow, els.grpAlign];
+    for (var g = 0; g < groups.length; g++) {
+      var btns = groups[g].querySelectorAll('button');
+      for (var b = 0; b < btns.length; b++) btns[b].disabled = !bl;
+    }
+    els.thRange.disabled = !bl;
+  }
+
+  els.grpFocus.addEventListener('click', function (e) {
+    var btn = e.target.closest('button');
+    if (!btn || btn.disabled) return;
+    S.focus = btn.dataset.v;
+    updateBar();
+    requestRender();
+  });
+  els.grpView.addEventListener('click', function (e) {
+    var btn = e.target.closest('button');
+    if (!btn || btn.disabled) return;
+    S.viewMode = btn.dataset.v;
+    buildStage();
+    updateBar();
+  });
+  els.grpShow.addEventListener('click', function (e) {
+    var btn = e.target.closest('button');
+    if (!btn || btn.disabled) return;
+    S.overlapShow = btn.dataset.v;
+    updateBar();
+    requestRender();
+  });
+  els.grpAlign.addEventListener('click', function (e) {
+    var btn = e.target.closest('button');
+    if (!btn || btn.disabled) return;
+    if (btn.dataset.v === 'manual') aoOpen();
+    else if (S.align !== 'auto') { S.align = 'auto'; setupAlignment(); }
+  });
+  els.thRange.addEventListener('input', function () {
+    S.threshold = +els.thRange.value;
+    els.thVal.textContent = els.thRange.value;
+    scheduleDiff();
+  });
+
+  /* ---------- 文件选择 ---------- */
+  els.pickBoth.addEventListener('click', function () {
+    if (S.imgs.A && !S.imgs.B) els.inputB.click();
+    else els.inputBoth.click();
+  });
+  els.pickA.addEventListener('click', function () { els.inputA.click(); });
+  els.pickB.addEventListener('click', function () { els.inputB.click(); });
+
+  els.inputBoth.addEventListener('change', async function () {
+    var fs = [];
+    for (var i = 0; i < els.inputBoth.files.length && fs.length < 2; i++) {
+      if (els.inputBoth.files[i].type.indexOf('image/') === 0) fs.push(els.inputBoth.files[i]);
+    }
+    els.inputBoth.value = '';
+    if (fs[0]) await loadToSlot('A', fs[0]);
+    if (fs[1]) await loadToSlot('B', fs[1]);
+  });
+  els.inputA.addEventListener('change', function () {
+    if (els.inputA.files[0]) loadToSlot('A', els.inputA.files[0]);
+    els.inputA.value = '';
+  });
+  els.inputB.addEventListener('change', function () {
+    if (els.inputB.files[0]) loadToSlot('B', els.inputB.files[0]);
+    els.inputB.value = '';
+  });
+
+  ['dragover', 'drop'].forEach(function (t) {
+    document.addEventListener(t, function (e) { e.preventDefault(); });
+  });
+  document.addEventListener('drop', async function (e) {
+    if (!e.dataTransfer) return;
+    var files = [];
+    for (var i = 0; i < e.dataTransfer.files.length; i++) {
+      if (e.dataTransfer.files[i].type.indexOf('image/') === 0) files.push(e.dataTransfer.files[i]);
+    }
+    if (files[0] && !S.imgs.A) await loadToSlot('A', files[0]);
+    if (files[1] && !S.imgs.B) await loadToSlot('B', files[1]);
+  });
+
+  /* ---------- 布局监听 ---------- */
+  if (window.ResizeObserver) {
+    new ResizeObserver(function () { requestRender(); }).observe(els.stage);
+    new ResizeObserver(function () { requestRender(); }).observe(els.aoCanvas);
+  }
+  window.addEventListener('resize', requestRender);
+
+  updateBar();
+
+  /* ---------- 测试钩子（不影响功能） ---------- */
+  window.__imgdiff = {
+    S: S,
+    solveAnchors: solveAnchors,
+    computeDiff: computeDiff,
+    setupAlignment: setupAlignment,
+    gridInfo: function () { return { w: S.grid.w, h: S.grid.h }; },
+    diffCount: function () {
+      var c = 0;
+      if (S.diffMask) for (var i = 0; i < S.diffMask.length; i++) c += S.diffMask[i];
+      return c;
+    },
+    diffAt: function (x, y) { return S.diffMask ? S.diffMask[y * S.grid.w + x] : -1; },
+    setThreshold: function (v) { S.threshold = v; els.thRange.value = v; els.thVal.textContent = String(v); computeDiff(); },
+    setAnchors: function (a, b) { S.anchors.A = a; S.anchors.B = b; },
+    applyManual: function () { S.align = 'manual'; setupAlignment(); },
+    loadPair: async function (fa, fb) {
+      S.imgs.A = await fileToImage(fa); S.anchors.A = [];
+      S.imgs.B = await fileToImage(fb); S.anchors.B = [];
+      S.align = 'auto';
+      setupAlignment();
+      return { w: S.grid.w, h: S.grid.h };
+    },
+    replaceSlot: loadToSlot
+  };
+})();
+</script>
+</body>
+</html>
